@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-brume text-encre font-sans text-[13.5px] leading-snug;
+  }
+  ::selection {
+    @apply bg-sarcelle-100 text-encre;
+  }
+  *:focus-visible {
+    @apply outline-none ring-2 ring-sarcelle-400 ring-offset-1 ring-offset-white;
+  }
+  /* Chiffres alignés partout : dossiers, montants, constantes */
+  input[type='number'],
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* ---- Champs de saisie ------------------------------------------- */
+  .champ {
+    @apply w-full rounded-xs border border-sarcelle-100 bg-white px-2 py-[5px] text-[13px]
+           text-encre placeholder:text-encre/35 transition
+           hover:border-sarcelle-400/60 focus:border-sarcelle focus:bg-sarcelle-50;
+  }
+  .champ:disabled {
+    @apply bg-black/[.03] text-encre/50;
+  }
+  select.champ {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%230B2B33' stroke-opacity='.45' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+    background-size: 15px;
+    padding-right: 22px;
+  }
+  .etiquette {
+    @apply block text-[11px] font-medium uppercase tracking-[.06em] text-encre/55;
+  }
+
+  /* ---- Panneaux de la fiche de consultation ------------------------
+     Le code couleur reprend celui du logiciel actuel pour que les
+     médecins retrouvent leurs repères sans réapprentissage.          */
+  .panneau {
+    @apply flex min-h-0 flex-col overflow-hidden rounded-xs border bg-white;
+  }
+  .panneau-titre {
+    @apply flex items-center justify-between border-b px-2.5 py-[5px]
+           text-[11px] font-semibold uppercase tracking-[.07em];
+  }
+
+  /* ---- Boutons ----------------------------------------------------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xs px-3 py-[7px]
+           text-[12.5px] font-medium transition disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-primaire {
+    @apply btn bg-sarcelle text-white hover:bg-ardoise active:translate-y-px;
+  }
+  .btn-secondaire {
+    @apply btn border border-sarcelle-100 bg-white text-ardoise hover:border-sarcelle-400 hover:bg-sarcelle-50;
+  }
+  .btn-fantome {
+    @apply btn text-ardoise/80 hover:bg-white hover:text-ardoise;
+  }
+  .btn-danger {
+    @apply btn border border-alerte/25 bg-white text-alerte hover:bg-alerte/5;
+  }
+
+  /* ---- Tableaux ---------------------------------------------------- */
+  .grille {
+    @apply w-full border-collapse text-[12.5px];
+  }
+  .grille thead th {
+    @apply sticky top-0 z-10 border-b border-sarcelle-100 bg-sarcelle-50/90 px-2.5 py-2
+           text-left text-[10.5px] font-semibold uppercase tracking-[.07em] text-ardoise/70 backdrop-blur;
+  }
+  .grille tbody td {
+    @apply border-b border-sarcelle-100/60 px-2.5 py-[7px] align-middle;
+  }
+  .grille tbody tr:hover {
+    @apply bg-sarcelle-50/60;
+  }
+
+  .puce {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[.05em];
+  }
+}
+
+/* Barres de défilement discrètes dans les panneaux denses */
+.fin::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.fin::-webkit-scrollbar-thumb {
+  background: rgba(14, 124, 134, 0.25);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.fin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media print {
+  .sans-impression {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
