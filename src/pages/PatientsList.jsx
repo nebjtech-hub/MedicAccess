@@ -77,8 +77,7 @@ export default function PatientsList() {
         Organisme: p.organisme_assurance ?? '',
         'N° sécurité sociale': p.numero_secu ?? '',
         Régime: p.regime_assurance ?? '',
-        'Taux de couverture (%)': p.taux_couverture ?? '',
-        Convention: p.convention ?? '',
+        Fonds: p.fonds_cnamgs ?? '',
         'Groupe sanguin': p.groupe_sanguin ?? '',
         Allergies: p.allergies ?? '',
         'Créé le': dateFr(p.created_at),
@@ -140,7 +139,7 @@ export default function PatientsList() {
           <Filtre label="Assurance">
             <select className="champ w-[150px]" value={f.organisme} onChange={(e) => set('organisme')(e.target.value)}>
               <option value="">Toutes</option>
-              {['CNAMGS', 'CNSS', 'Assurance privée', 'Mutuelle d’entreprise', 'Aucun'].map((o) => (
+              {['CNAMGS', 'Aucune', 'Autre'].map((o) => (
                 <option key={o}>{o}</option>
               ))}
             </select>

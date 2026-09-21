@@ -5,7 +5,7 @@ import Interrogatoire from '../Interrogatoire'
 import { Carte } from '../ui'
 
 /* Constantes montrées d'emblée ; les autres se déplient. */
-const PRIORITAIRES = ['Poids', 'Taille', 'PA systolique', 'PA diastolique', 'Température']
+const PRIORITAIRES = ['Poids', 'Taille', 'PA systolique', 'PA diastolique', 'Fréquence Cardiaque']
 const SELON_MOTIF = {
   obesite: ['Tour de taille', 'Tour de hanche', 'Tour de cou'],
   diabete: ['DEXTRO', 'Tour de taille'],

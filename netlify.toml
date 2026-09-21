@@ -1,0 +1,26 @@
+# Configuration Netlify — MedicAccess Gabon
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Redirection de repli pour le routage côté client.
+# Doublon volontaire de public/_redirects : selon la façon dont le site est
+# déployé (dossier lié, CLI, dépôt Git), c'est l'un ou l'autre qui est lu.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Les fichiers générés par Vite portent un hash dans leur nom : ils peuvent
+# être mis en cache indéfiniment. index.html ne doit jamais l'être, sinon les
+# utilisateurs gardent une ancienne version après un déploiement.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"

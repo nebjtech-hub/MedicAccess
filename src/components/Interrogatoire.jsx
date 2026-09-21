@@ -22,12 +22,16 @@ const ETATS = {
 export default function Interrogatoire({
   consultationId, grilles, motifs, sexePatient, onInserer, onValider, onProgression,
 }) {
+  const [reponses, setReponses] = useState({})
+
+  // Les rubriques conditionnelles apparaissent et disparaissent selon les
+  // réponses : « Diabète de novo » n'ouvre pas les mêmes questions que
+  // « Diabète connu ».
   const { sections } = useMemo(
-    () => fusionner(grilles, motifs, sexePatient),
-    [grilles, motifs, sexePatient]
+    () => fusionner(grilles, motifs, sexePatient, reponses),
+    [grilles, motifs, sexePatient, reponses]
   )
 
-  const [reponses, setReponses] = useState({})
   const [pret, setPret] = useState(false)
   const [etat, setEtat] = useState({ message: '', erreur: '' })
   const [aide, setAide] = useState(false)

@@ -10,6 +10,7 @@ export async function chargerGrilles() {
     .select(
       'id, code, nom, icone, ordre, defaut, ' +
         'sections:grille_sections(id, titre, sexe, ordre, a_valider, ' +
+        'condition_item_code, condition_valeur, ' +
         'liens:grille_items(ordre, item:items(id, code, libelle, type, unite, options, categorie)))'
     )
     .eq('actif', true)
@@ -39,8 +40,20 @@ export async function chargerGrilles() {
  * prévue par le médecin, mais l'état est unique : c'est la clé de la
  * mutualisation. `mutualise` sert à l'indiquer visuellement.
  */
-export function fusionner(grilles, codesRetenus, sexePatient) {
+export function fusionner(grilles, codesRetenus, sexePatient, reponses = null) {
   const retenues = grilles.filter((g) => codesRetenus.includes(g.code))
+
+  // Code d'item → identifiant, pour évaluer les conditions de rubrique
+  const parCode = {}
+  retenues.forEach((g) =>
+    g.sections.forEach((s) => s.items.forEach((i) => (parCode[i.code] = i.id)))
+  )
+  const conditionRemplie = (s) => {
+    if (!s.condition_item_code) return true
+    if (!reponses) return true // en l'absence de réponses, on n'ampute rien
+    const id = parCode[s.condition_item_code]
+    return id ? (reponses[id]?.valeur ?? '') === s.condition_valeur : true
+  }
   const compte = new Map()
   retenues.forEach((g) =>
     g.sections.forEach((s) =>
@@ -53,6 +66,7 @@ export function fusionner(grilles, codesRetenus, sexePatient) {
     g.sections.forEach((s) => {
       // Les rubriques réservées à un sexe sont masquées pour l'autre
       if (s.sexe && sexePatient && s.sexe !== sexePatient) return
+      if (!conditionRemplie(s)) return
       const items = s.items.map((i) => ({ ...i, mutualise: (compte.get(i.id) ?? 0) > 1 }))
       if (items.length) sections.push({ ...s, grille: g.nom, grilleCode: g.code, items })
     })
@@ -214,7 +228,8 @@ export async function chargerBilans(grilles, codesRetenus) {
   const { data } = await supabase
     .from('bilan_blocs')
     .select('id, titre, ordre, a_valider, grille:grilles(code, nom), ' +
-            'examens:bilan_examens(id, libelle, code, type, conditionnel, condition, ordre)')
+            'examens:bilan_examens(id, libelle, code, ref_code, type, unite, type_resultat, ' +
+            'conditionnel, condition, ordre)')
     .in('grille_id', ids)
     .order('ordre')
 

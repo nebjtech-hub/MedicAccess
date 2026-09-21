@@ -10,7 +10,13 @@ const SEXES = ['Masculin', 'Féminin']
 const ETATS_CIVILS = ['Célibataire', 'Marié(e)', 'Concubinage', 'Veuf(ve)', 'Divorcé(e)']
 const MOYENS = ['Téléphone', 'SMS', 'WhatsApp', 'Email']
 const GROUPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
-const ORGANISMES = ['CNAMGS', 'CNSS', 'Assurance privée', 'Mutuelle d’entreprise', 'Aucun']
+const FONDS = [
+  { value: 'GEF', label: 'GEF — Gabonais économiquement faibles' },
+  { value: 'AP', label: 'AP — Agents publics' },
+  { value: 'SP', label: 'SP — Secteur privé' },
+]
+
+const ORGANISMES = ['CNAMGS', 'Aucune', 'Autre']
 const REGIMES = ['GEF (Gabonais économiquement faible)', 'Agents publics', 'Secteur privé', 'Étudiant', 'Retraité', 'Autre']
 const LIENS = ['Titulaire', 'Conjoint(e)', 'Enfant', 'Ascendant', 'Autre ayant droit']
 const PROVINCES = [
@@ -56,8 +62,7 @@ const VIDE = {
   organisme_assurance: '',
   regime_assurance: '',
   numero_carte_assure: '',
-  taux_couverture: '',
-  convention: '',
+  fonds_cnamgs: '',
   numero_police: '',
   validite_assurance: '',
   assure_principal: '',
@@ -117,7 +122,6 @@ export default function PatientForm() {
     const charge = Object.fromEntries(
       Object.entries(f).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v])
     )
-    charge.taux_couverture = f.taux_couverture === '' ? null : Number(f.taux_couverture)
     charge.medecin_traitant = f.medecin_traitant || medecin?.id || null
 
     const requete = modification
@@ -230,10 +234,25 @@ export default function PatientForm() {
           <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
             <Choix
               label="Organisme"
+              vide={null}
               options={ORGANISMES}
-              value={f.organisme_assurance}
-              onChange={maj('organisme_assurance')}
+              value={ORGANISMES.includes(f.organisme_assurance) ? f.organisme_assurance : 'Autre'}
+              onChange={(e) =>
+                setF((x) => ({
+                  ...x,
+                  organisme_assurance: e.target.value === 'Autre' ? '' : e.target.value,
+                  fonds_cnamgs: e.target.value === 'CNAMGS' ? x.fonds_cnamgs : '',
+                }))
+              }
             />
+            {!['CNAMGS', 'Aucune'].includes(f.organisme_assurance) && (
+              <Champ
+                label="Nom de l’organisme"
+                value={f.organisme_assurance}
+                onChange={maj('organisme_assurance')}
+                placeholder="Assurance, mutuelle d’entreprise…"
+              />
+            )}
             <Champ
               label="N° de sécurité sociale"
               value={f.numero_secu}
@@ -243,17 +262,14 @@ export default function PatientForm() {
             <Choix label="Régime" options={REGIMES} value={f.regime_assurance} onChange={maj('regime_assurance')} />
             <Champ label="N° de carte d’assuré" value={f.numero_carte_assure} onChange={maj('numero_carte_assure')} />
             <Champ label="N° de police" value={f.numero_police} onChange={maj('numero_police')} />
-            <Champ
-              label="Taux de couverture"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              suffixe="%"
-              value={f.taux_couverture ?? ''}
-              onChange={maj('taux_couverture')}
-            />
-            <Champ label="Convention" value={f.convention} onChange={maj('convention')} placeholder="BGFI, Total…" />
+            {f.organisme_assurance === 'CNAMGS' && (
+              <Choix
+                label="Fonds"
+                options={FONDS}
+                value={f.fonds_cnamgs ?? ''}
+                onChange={maj('fonds_cnamgs')}
+              />
+            )}
             <Champ
               label="Validité de la couverture"
               type="date"

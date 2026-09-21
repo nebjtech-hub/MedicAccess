@@ -129,8 +129,8 @@ export default function PatientDossier() {
                 <Puce ton="Validé">{patient.organisme_assurance}</Puce>
                 {patient.numero_secu && <span className="font-mono">n° {patient.numero_secu}</span>}
                 {patient.regime_assurance && <span>{patient.regime_assurance}</span>}
-                {patient.taux_couverture ? <span>couverture {patient.taux_couverture} %</span> : null}
-                {patient.convention && <span>convention {patient.convention}</span>}
+                {patient.fonds_cnamgs && <span>fonds {patient.fonds_cnamgs}</span>}
+                
                 {patient.validite_assurance && <span>valide jusqu’au {dateFr(patient.validite_assurance)}</span>}
               </p>
             )}

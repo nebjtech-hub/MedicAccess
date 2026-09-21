@@ -10,12 +10,18 @@ import MotifSelector from '../components/MotifSelector'
 import { ChampSuggere } from '../components/ChampsAssistes'
 import { Carte, Alerte, Champ, Choix, Chargement } from '../components/ui'
 
-const ORGANISMES = ['CNAMGS', 'CNSS', 'Assurance privée', 'Mutuelle d’entreprise', 'Aucun']
+const FONDS = [
+  { value: 'GEF', label: 'GEF — Gabonais économiquement faibles' },
+  { value: 'AP', label: 'AP — Agents publics' },
+  { value: 'SP', label: 'SP — Secteur privé' },
+]
+
+const ORGANISMES = ['CNAMGS', 'Aucune', 'Autre']
 
 const VIDE = {
   nom: '', prenom: '', sexe: '', date_naissance: '', age_saisi: '', age_presume: false,
   telephone: '',
-  organisme_assurance: '', numero_secu: '', taux_couverture: '', convention: '',
+  organisme_choix: 'CNAMGS', organisme_autre: '', numero_secu: '', fonds_cnamgs: '',
   ville: 'Libreville', quartier: '', adresse: '',
 }
 
@@ -67,27 +73,6 @@ export default function NouvelleConsultation() {
     )
   }
 
-  /* Taux de couverture : on reprend celui le plus souvent saisi pour cet
-     organisme, plutôt que d'inventer un barème. */
-  const majOrganisme = async (e) => {
-    const org = e.target.value
-    setF((x) => ({ ...x, organisme_assurance: org }))
-    if (!org) return
-    const { data } = await supabase
-      .from('patients')
-      .select('taux_couverture')
-      .eq('organisme_assurance', org)
-      .not('taux_couverture', 'is', null)
-      .limit(60)
-    const compte = {}
-    ;(data ?? []).forEach((p) => {
-      const t = String(p.taux_couverture)
-      compte[t] = (compte[t] ?? 0) + 1
-    })
-    const frequent = Object.entries(compte).sort((a, b) => b[1] - a[1])[0]?.[0]
-    if (frequent) setF((x) => ({ ...x, taux_couverture: frequent }))
-  }
-
   const ageAffiche = useMemo(
     () => (f.date_naissance && !f.age_presume ? age(f.date_naissance) : f.age_saisi),
     [f.date_naissance, f.age_presume, f.age_saisi]
@@ -99,11 +84,12 @@ export default function NouvelleConsultation() {
       setErreur('Le nom du patient est obligatoire.')
       return null
     }
-    const { age_saisi, ...champs } = f
+    const { age_saisi, organisme_choix, organisme_autre, ...champs } = f
+    champs.organisme_assurance =
+      organisme_choix === 'Autre' ? organisme_autre.trim() || 'Autre' : organisme_choix
     const charge = Object.fromEntries(
       Object.entries(champs).map(([k, v]) => [k, typeof v === 'string' && !v.trim() ? null : v])
     )
-    charge.taux_couverture = f.taux_couverture === '' ? null : Number(f.taux_couverture)
     charge.medecin_traitant = medecin?.id ?? null
 
     const { data, error } = await supabase.from('patients').insert(charge).select('*').single()
@@ -227,25 +213,36 @@ export default function NouvelleConsultation() {
               <Bloc titre="Assurance">
                 <Choix
                   label="Organisme"
+                  vide={null}
                   options={ORGANISMES}
-                  value={f.organisme_assurance}
-                  onChange={majOrganisme}
+                  value={f.organisme_choix}
+                  onChange={(e) =>
+                    setF((x) => ({
+                      ...x,
+                      organisme_choix: e.target.value,
+                      fonds_cnamgs: e.target.value === 'CNAMGS' ? x.fonds_cnamgs : '',
+                    }))
+                  }
                 />
-                <Champ label="N° d’assuré" value={f.numero_secu} onChange={maj('numero_secu')} />
-                <Champ
-                  label="Taux de couverture"
-                  suffixe="%"
-                  inputMode="numeric"
-                  value={f.taux_couverture}
-                  onChange={maj('taux_couverture')}
-                />
-                <ChampSuggere
-                  label="Convention"
-                  domaine="convention"
-                  valeur={f.convention}
-                  onChange={(v) => setF((x) => ({ ...x, convention: v }))}
-                  placeholder="BGFI, Total…"
-                />
+                {f.organisme_choix === 'Autre' && (
+                  <Champ
+                    label="Nom de l’organisme"
+                    value={f.organisme_autre}
+                    onChange={maj('organisme_autre')}
+                    placeholder="Assurance, mutuelle d’entreprise…"
+                  />
+                )}
+                {f.organisme_choix === 'CNAMGS' && (
+                  <Choix
+                    label="Fonds"
+                    options={FONDS}
+                    value={f.fonds_cnamgs}
+                    onChange={maj('fonds_cnamgs')}
+                  />
+                )}
+                {f.organisme_choix !== 'Aucune' && (
+                  <Champ label="N° d’assuré" value={f.numero_secu} onChange={maj('numero_secu')} />
+                )}
               </Bloc>
 
               <Bloc titre="Adresse">

@@ -38,8 +38,7 @@ export const CATALOGUE_VARIABLES = [
       ['patient.organisme', "Organisme d'assurance"],
       ['patient.numero_secu', 'N° de sécurité sociale'],
       ['patient.regime', "Régime d'assurance"],
-      ['patient.taux', 'Taux de couverture'],
-      ['patient.convention', 'Convention'],
+      ['patient.fonds', 'Fonds CNAMGS'],
     ],
   },
   {
@@ -49,6 +48,7 @@ export const CATALOGUE_VARIABLES = [
       ['consultation.date', 'Date de la consultation'],
       ['consultation.type', 'Type de consultation'],
       ['consultation.motif', 'Motif'],
+      ['consultation.plaintes', 'Plaintes du patient'],
       ['consultation.histoire_maladie', 'Histoire de la maladie'],
       ['consultation.examen_clinique', 'Examen clinique'],
       ['consultation.examen_paraclinique', 'Examen paraclinique'],
@@ -72,7 +72,9 @@ export const CATALOGUE_VARIABLES = [
     groupe: 'Prescriptions',
     variables: [
       ['examens.demandes', 'Examens prescrits ce jour'],
-      ['examens.resultats', 'Résultats des examens reçus'],
+      ['examens.resultats', 'Résultats reçus ce jour'],
+      ['examens.anterieurs', 'Résultats des consultations précédentes'],
+      ['calculs.tous', 'Valeurs calculées (DFG, LDL…)'],
       ['ordonnance.lignes', 'Traitement prescrit ce jour'],
     ],
   },
@@ -114,6 +116,7 @@ export const CATALOGUE_VARIABLES = [
 export function construireContexte({
   patient, consultation, parametres = [], medecin, compteRendu,
   motifs = [], interrogatoire = {}, examens = [], ordonnance = [], resultats = [],
+  calculs = [], anterieurs = [],
 }) {
   const p = patient ?? {}
   const c = consultation ?? {}
@@ -154,13 +157,13 @@ export function construireContexte({
     'patient.organisme': p.organisme_assurance || 'Aucun',
     'patient.numero_secu': p.numero_secu ?? '',
     'patient.regime': p.regime_assurance ?? '',
-    'patient.taux': p.taux_couverture ? `${p.taux_couverture} %` : '',
-    'patient.convention': p.convention ?? '',
+    'patient.fonds': p.fonds_cnamgs ?? '',
 
     'consultation.numero': c.numero ?? '',
     'consultation.date': dateFr(c.date_consultation),
     'consultation.type': c.type_consultation ?? '',
     'consultation.motif': c.motif ?? '',
+    'consultation.plaintes': c.plaintes ?? '',
     'consultation.histoire_maladie': c.histoire_maladie ?? '',
     'consultation.examen_clinique': c.examen_clinique ?? '',
     'consultation.examen_paraclinique': c.examen_paraclinique ?? '',
@@ -194,14 +197,41 @@ export function construireContexte({
     'interrogatoire.histoire': interrogatoire.histoire_maladie ?? '',
     'interrogatoire.complet': interrogatoire.complet ?? '',
 
-    'examens.demandes': examens.length
-      ? examens
-          .map((e) => `— ${e.libelle}${e.urgent ? ' (urgent)' : ''}`)
+    // Prescrit = à faire. Un examen dont le résultat est déjà saisi n'est
+    // pas une prescription, il figure dans les résultats.
+    'examens.demandes': (() => {
+      // Prescrit = coché par le médecin. Un examen dont le résultat est
+      // déjà connu reste une prescription s'il a été coché.
+      const aFaire = examens.filter((e) =>
+        e.prescrit !== undefined ? e.prescrit : !e.resultat
+      )
+      return aFaire.length
+        ? aFaire.map((e) => `— ${e.libelle}${e.urgent ? ' (urgent)' : ''}`).join('\n')
+        : 'Aucun examen prescrit ce jour.'
+    })(),
+
+    'examens.anterieurs': anterieurs.length
+      ? anterieurs
+          .map(
+            (r) =>
+              `— ${r.libelle} : ${r.resultat}${r.unite && r.unite !== '—' ? ' ' + r.unite : ''}` +
+              `${r.date_resultat ? ` (${dateFr(r.date_resultat)})` : ''}`
+          )
           .join('\n')
-      : 'Aucun examen prescrit ce jour.',
+      : 'Aucun résultat antérieur.',
 
     'examens.resultats': resultats.length
-      ? resultats.map((r) => `— ${r.libelle} : ${r.resultat}`).join('\n')
+      ? resultats
+          .map((r) => `— ${r.libelle} : ${r.resultat}${r.unite && r.unite !== '—' ? ' ' + r.unite : ''}`)
+          .join('\n')
+      : 'Aucun résultat reçu ce jour.',
+
+    'calculs.tous': calculs.length
+      ? calculs
+          .filter((c) => c.valeur !== null)
+          .map((c) => `— ${c.nom} : ${c.valeur}${c.unite ? ' ' + c.unite : ''}` +
+                      `${c.interpretation ? ` (${c.interpretation})` : ''}`)
+          .join('\n')
       : '',
 
     'ordonnance.lignes': ordonnance.length
@@ -235,8 +265,33 @@ export function fusionner(gabarit = '', contexte = {}) {
   })
 }
 
+/**
+ * Retire les sections restées vides après fusion.
+ *
+ * Un titre sans contenu — « EXAMENS PARACLINIQUES » suivi de rien —
+ * donne un document qui a l'air bâclé. Mieux vaut que la section
+ * disparaisse.
+ */
+function retirerSectionsVides(texte) {
+  return texte
+    .split(/\n{2,}/)
+    .filter((bloc) => {
+      if (bloc.trim() === '') return false
+      const lignes = bloc.split('\n')
+      const titre = lignes[0].trim()
+      const corps = lignes.slice(1).join('').trim()
+      // Un titre en capitales sans corps s'en va, qu'il soit seul dans
+      // son bloc ou suivi de lignes vides.
+      const estTitre = titre === titre.toUpperCase() && /[A-ZÀ-Ý]/.test(titre)
+      return !(estTitre && corps === '')
+    })
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** Assemble en-tête + corps + pied puis fusionne. */
 export function composerCompteRendu(modele, contexte) {
   const bloc = [modele?.entete, modele?.corps, modele?.pied].filter(Boolean).join('\n\n———\n\n')
-  return fusionner(bloc, contexte)
+  return retirerSectionsVides(fusionner(bloc, contexte))
 }

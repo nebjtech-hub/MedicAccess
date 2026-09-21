@@ -1,0 +1,4 @@
+# Application à page unique : toutes les routes sont résolues par React Router.
+# Sans cette règle, un rafraîchissement sur /consultations/liste renvoie un 404
+# Netlify, puisqu'aucun fichier n'existe à ce chemin sur le serveur.
+/*    /index.html   200

@@ -35,6 +35,7 @@ export default function Consultation() {
   const [interrogatoire, setInterrogatoire] = useState({})
   const [avancement, setAvancement] = useState({ faits: 0, total: 0 })
   const [etat, setEtat] = useState({ envoi: false, message: '', erreur: '' })
+  const [saisieEnCours, setSaisieEnCours] = useState(false)
 
   const etape = cs?.etape ?? 'motifs'
 
@@ -130,6 +131,29 @@ export default function Consultation() {
       .filter((p) => p.libelle && (p.valeur || p.remarque))
     if (lignes.length) await supabase.from('consultation_parametres').insert(lignes)
   }, [params, id])
+
+  /* Enregistrement différé de la consultation : les textes saisis partent
+     en base une seconde après la dernière frappe. Un rafraîchissement ou
+     un retour en arrière ne fait donc rien perdre. */
+  useEffect(() => {
+    if (!cs || chargement) return
+    setSaisieEnCours(true)
+    const minuteur = setTimeout(async () => {
+      await enregistrerConsultation()
+      setSaisieEnCours(false)
+    }, 1000)
+    return () => clearTimeout(minuteur)
+  }, [
+    cs?.plaintes, cs?.examen_clinique, cs?.examen_paraclinique, cs?.diagnostic,
+    cs?.conduite_a_tenir, cs?.note, cs?.antecedents, cs?.histoire_maladie,
+  ])
+
+  /* Les constantes suivent le même principe. */
+  useEffect(() => {
+    if (!params.length || chargement || etape === 'motifs') return
+    const minuteur = setTimeout(() => enregistrerParametres(), 1200)
+    return () => clearTimeout(minuteur)
+  }, [params, chargement, etape])
 
   const allerA = async (cle, supplement = {}) => {
     setEtat({ envoi: true, message: '', erreur: '' })
@@ -255,6 +279,10 @@ export default function Consultation() {
         </ol>
       )}
 
+      {saisieEnCours && (
+        <p className="sans-impression mb-2 text-[11px] text-encre/40">Enregistrement…</p>
+      )}
+
       {etat.erreur && (
         <div className="mb-3">
           <Alerte>{etat.erreur}</Alerte>
@@ -331,6 +359,7 @@ export default function Consultation() {
           medecin={medecin}
           grilles={grilles}
           motifs={motifs}
+          params={params}
           onRetour={() => allerA('interrogatoire')}
           onValider={() => allerA('compte_rendu')}
         />

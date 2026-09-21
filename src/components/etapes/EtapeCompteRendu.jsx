@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Printer, RefreshCw, Save, CheckCircle2, Signature } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { composerCompteRendu, construireContexte, fusionner } from '../../lib/templates'
+import { calculerTout } from '../../lib/calculs'
+import { age } from '../../lib/format'
 import { jourLong } from '../../lib/format'
 import { Carte, Alerte, Puce } from '../ui'
 
@@ -14,6 +16,7 @@ export default function EtapeCompteRendu({
   const [chargement, setChargement] = useState(true)
   const [envoi, setEnvoi] = useState(false)
   const [etat, setEtat] = useState({ message: '', erreur: '' })
+  const [perime, setPerime] = useState(false)
   // React.StrictMode joue deux fois les effets en développement : sans ce
   // verrou, deux insertions partent en parallèle et la seconde heurte
   // l'index unique du compte rendu de consultation.
@@ -34,10 +37,12 @@ export default function EtapeCompteRendu({
     const choisi = parMotif ?? parDefaut ?? null
     setModele(choisi)
 
-    const [{ data: examens }, { data: ordo }, { data: recus }] = await Promise.all([
+    const [{ data: examens }, { data: ordo }, { data: anterieurs }] = await Promise.all([
+      // Les examens DE CETTE consultation : ceux prescrits comme ceux
+      // dont le résultat a été saisi le jour même.
       supabase
         .from('examens_demandes')
-        .select('libelle, urgent, type')
+        .select('libelle, urgent, type, unite, resultat, statut, prescrit')
         .eq('consultation_id', consultation.id)
         .order('date_demande'),
       supabase
@@ -45,15 +50,35 @@ export default function EtapeCompteRendu({
         .select('lignes:ordonnance_lignes(medicament, dosage, forme, posologie, duree, instructions, ordre)')
         .eq('consultation_id', consultation.id)
         .maybeSingle(),
+      // Résultats des consultations PRÉCÉDENTES, pour situer l'évolution.
+      // Disponibles dans les modèles via {{examens.anterieurs}}, absents
+      // du modèle par défaut.
       supabase
         .from('examens_demandes')
-        .select('libelle, resultat, date_resultat')
+        .select('libelle, resultat, unite, date_resultat')
         .eq('patient_id', patient.id)
+        .neq('consultation_id', consultation.id)
         .eq('statut', 'Résultat disponible')
         .not('resultat', 'is', null)
         .order('date_resultat', { ascending: false })
         .limit(20),
     ])
+
+    // Les valeurs calculées sont recomposées à partir des constantes et
+    // des résultats, pour que le compte rendu les reprenne.
+    const mesures = {}
+    params.forEach((p) => {
+      if (String(p.valeur ?? '').trim()) mesures[p.libelle] = p.valeur
+    })
+    // Seuls les résultats du jour alimentent les calculs : un DFG
+    // recalculé sur une créatinine d'il y a six mois serait trompeur.
+    ;(examens ?? []).forEach((e) => {
+      if (e.resultat) mesures[e.libelle] = e.resultat
+    })
+    const calculs = calculerTout(mesures, {
+      age: patient?.date_naissance ? age(patient.date_naissance) : null,
+      sexe: patient?.sexe,
+    })
 
     const contexte = construireContexte({
       patient,
@@ -64,7 +89,9 @@ export default function EtapeCompteRendu({
       interrogatoire,
       examens: examens ?? [],
       ordonnance: [...(ordo?.lignes ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)),
-      resultats: recus ?? [],
+      resultats: (examens ?? []).filter((e) => e.resultat),
+      anterieurs: anterieurs ?? [],
+      calculs,
     })
 
     return { contexte, modele: choisi }
@@ -95,6 +122,21 @@ export default function EtapeCompteRendu({
 
       if (existant) {
         setCr(existant)
+        // Le texte est figé à la génération. Si la consultation a bougé
+        // depuis, on le signale plutôt que d'afficher un document
+        // silencieusement dépassé.
+        const { data: dernier } = await supabase
+          .from('examens_demandes')
+          .select('date_demande')
+          .eq('consultation_id', consultation.id)
+          .order('date_demande', { ascending: false })
+          .limit(1)
+        const reperes = [
+          dernier?.[0]?.date_demande,
+          consultation.updated_at,
+        ].filter(Boolean)
+        const edite = new Date(existant.updated_at ?? existant.created_at).getTime()
+        setPerime(reperes.some((d) => new Date(d).getTime() > edite + 2000))
         setChargement(false)
         return
       }
@@ -134,6 +176,7 @@ export default function EtapeCompteRendu({
     const { contexte, modele: m } = await construire()
     if (!m) return
     setCr((c) => ({ ...c, contenu: composerCompteRendu(m, contexte) }))
+    setPerime(false)
     setEtat({ message: 'Compte rendu régénéré depuis le modèle.', erreur: '' })
     setTimeout(() => setEtat((e) => ({ ...e, message: '' })), 2600)
   }
@@ -203,6 +246,18 @@ export default function EtapeCompteRendu({
   return (
     <div className="space-y-3">
       {etat.erreur && <Alerte>{etat.erreur}</Alerte>}
+
+      {perime && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xs border border-panneau-ambreb bg-panneau-ambre px-3 py-2 text-[12.5px] text-[#8a5010]">
+          <span className="flex-1">
+            Ce compte rendu a été généré avant vos dernières modifications de la
+            consultation. Il ne les reprend pas.
+          </span>
+          <button onClick={regenerer} className="btn-secondaire">
+            <RefreshCw className="h-[13px] w-[13px]" /> Régénérer maintenant
+          </button>
+        </div>
+      )}
 
       <Carte
         titre={cr.titre}
