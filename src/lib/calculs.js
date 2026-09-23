@@ -7,8 +7,10 @@
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ Toutes les formules ci-dessous sont des formules publiées et     │
  * │ d'usage courant, mais elles n'ont PAS été validées par le        │
- * │ médecin, et les unités attendues supposent des rendus de         │
- * │ laboratoire en g/L et mg/L. Chaque résultat est affiché avec     │
+ * │ médecin. Les unités attendues sont celles du laboratoire         │
+ * │ partenaire : mmol/L pour le glucose, les lipides, le calcium et  │
+ * │ l'urée, µmol/L pour la créatinine et l'acide urique, g/L pour    │
+ * │ l'albumine. Chaque résultat est affiché avec                     │
  * │ la mention de sa formule pour qu'il soit vérifiable, et reste    │
  * │ indicatif : c'est le médecin qui l'accepte ou l'écarte.          │
  * └──────────────────────────────────────────────────────────────────┘
@@ -36,11 +38,11 @@ export const CALCULS = [
     examens: ['DFG estimé', 'Débit de filtration glomérulaire estimé (DFG)'],
     formule: 'CKD-EPI 2021, sans coefficient ethnique',
     sources: ['Créatinine'],
-    unites: { 'Créatinine': 'mg/L' },
+    unites: { 'Créatinine': 'µmol/L' },
     besoinPatient: ['age', 'sexe'],
     calcul: ({ Créatinine }, patient) => {
-      // Créatinine rendue en mg/L par les laboratoires locaux → mg/dL
-      const scr = Créatinine / 10
+      // Le laboratoire rend en µmol/L ; la formule attend des mg/dL
+      const scr = Créatinine / 88.4
       const age = patient?.age
       const sexe = patient?.sexe
       if (!scr || !age || !sexe) return null
@@ -68,30 +70,30 @@ export const CALCULS = [
     code: 'ldl_calcule',
     nom: 'LDL cholestérol calculé',
     abrege: 'LDL calculé',
-    unite: 'g/L',
+    unite: 'mmol/L',
     examens: ['LDL cholestérol', 'LDL-cholestérol'],
-    formule: 'Friedewald : CT − HDL − TG/5',
+    formule: 'Friedewald : CT − HDL − TG/2,2 (en mmol/L)',
     sources: ['Cholestérol total', 'HDL cholestérol', 'Triglycérides'],
-    unites: { 'Cholestérol total': 'g/L', 'HDL cholestérol': 'g/L', Triglycérides: 'g/L' },
+    unites: { 'Cholestérol total': 'mmol/L', 'HDL cholestérol': 'mmol/L', Triglycérides: 'mmol/L' },
     calcul: ({ 'Cholestérol total': ct, 'HDL cholestérol': hdl, Triglycérides: tg }) => {
       if (!ct || !hdl || tg === null) return null
-      if (tg >= 4) return null // formule invalide au-delà de 4 g/L
-      return arrondi(ct - hdl - tg / 5)
+      if (tg >= 4.5) return null // formule invalide au-delà de 4,5 mmol/L
+      return arrondi(ct - hdl - tg / 2.2)
     },
     avertissement: (v, vals) =>
-      vals.Triglycérides >= 4
-        ? 'Triglycérides ≥ 4 g/L : la formule de Friedewald ne s’applique pas, dosage direct nécessaire'
+      vals.Triglycérides >= 4.5
+        ? 'Triglycérides ≥ 4,5 mmol/L : la formule de Friedewald ne s’applique pas, dosage direct nécessaire'
         : null,
   },
   {
     code: 'non_hdl',
     nom: 'Cholestérol non-HDL',
     abrege: 'Non-HDL',
-    unite: 'g/L',
+    unite: 'mmol/L',
     examens: ['Cholestérol non-HDL', 'Non-HDL-cholestérol'],
     formule: 'CT − HDL',
     sources: ['Cholestérol total', 'HDL cholestérol'],
-    unites: { 'Cholestérol total': 'g/L', 'HDL cholestérol': 'g/L' },
+    unites: { 'Cholestérol total': 'mmol/L', 'HDL cholestérol': 'mmol/L' },
     calcul: ({ 'Cholestérol total': ct, 'HDL cholestérol': hdl }) =>
       ct && hdl ? arrondi(ct - hdl) : null,
   },
@@ -103,7 +105,7 @@ export const CALCULS = [
     formule: 'Cholestérol total ÷ HDL',
     examens: ['Rapport cholestérol total / HDL'],
     sources: ['Cholestérol total', 'HDL cholestérol'],
-    unites: { 'Cholestérol total': 'g/L', 'HDL cholestérol': 'g/L' },
+    unites: { 'Cholestérol total': 'mmol/L', 'HDL cholestérol': 'mmol/L' },
     calcul: ({ 'Cholestérol total': ct, 'HDL cholestérol': hdl }) =>
       ct && hdl ? arrondi(ct / hdl, 1) : null,
   },
@@ -111,13 +113,13 @@ export const CALCULS = [
     code: 'calcium_corrige',
     nom: 'Calcémie corrigée par l’albuminémie',
     abrege: 'Ca corrigé',
-    unite: 'mg/L',
-    examens: ['Calcémie corrigée'],
-    formule: 'Ca + 0,8 × (40 − albuminémie en g/L)',
+    unite: 'mmol/L',
+    examens: ['Calcémie corrigée', 'Calcémie corrigée sur l’albumine'],
+    formule: 'Ca + 0,02 × (40 − albuminémie en g/L)',
     sources: ['Calcémie', 'Albuminémie'],
-    unites: { Calcémie: 'mg/L', Albuminémie: 'g/L' },
+    unites: { Calcémie: 'mmol/L', Albuminémie: 'g/L' },
     calcul: ({ Calcémie: ca, Albuminémie: alb }) =>
-      ca && alb ? arrondi(ca + 0.8 * (40 - alb), 1) : null,
+      ca && alb ? arrondi(ca + 0.02 * (40 - alb), 2) : null,
   },
   {
     code: 'rapport_aldo_renine',
