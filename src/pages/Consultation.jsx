@@ -10,6 +10,8 @@ import {
 import { imc, interpretationImc, age, dateFr, initiales } from '../lib/format'
 import { Chargement, Alerte, Puce, Carte } from '../components/ui'
 import MotifSelector from '../components/MotifSelector'
+import ConsultationPrecedente from '../components/ConsultationPrecedente'
+import DossierLateral from '../components/DossierLateral'
 import EtapeInterrogatoire from '../components/etapes/EtapeInterrogatoire'
 import EtapePrescriptions from '../components/etapes/EtapePrescriptions'
 import EtapeCompteRendu from '../components/etapes/EtapeCompteRendu'
@@ -36,6 +38,7 @@ export default function Consultation() {
   const [avancement, setAvancement] = useState({ faits: 0, total: 0 })
   const [etat, setEtat] = useState({ envoi: false, message: '', erreur: '' })
   const [saisieEnCours, setSaisieEnCours] = useState(false)
+  const [dossierOuvert, setDossierOuvert] = useState(false)
 
   const etape = cs?.etape ?? 'motifs'
 
@@ -155,6 +158,13 @@ export default function Consultation() {
     return () => clearTimeout(minuteur)
   }, [params, chargement, etape])
 
+  /** Reprend un extrait du dossier dans un champ de la consultation. */
+  const reprendre = (champ, valeur) =>
+    setCs((c) => {
+      const actuel = (c[champ] ?? '').trim()
+      return { ...c, [champ]: actuel ? `${actuel}\n${valeur}` : valeur }
+    })
+
   const allerA = async (cle, supplement = {}) => {
     setEtat({ envoi: true, message: '', erreur: '' })
     const ok = await enregistrerConsultation({ ...supplement, etape: cle })
@@ -198,7 +208,12 @@ export default function Consultation() {
   const terminee = etape === 'terminee'
 
   return (
-    <div className="mx-auto max-w-5xl px-3 py-5 lg:px-6">
+    <div className="flex items-start">
+      <div
+        className={`mx-auto w-full px-3 py-5 lg:px-6 ${
+          dossierOuvert ? 'max-w-4xl' : 'max-w-5xl'
+        }`}
+      >
       {/* ------------------------------------------------------ bandeau patient */}
       <div className="mb-4 rounded-xs border border-sarcelle-100 bg-white shadow-fiche">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -223,9 +238,15 @@ export default function Consultation() {
             </p>
           </div>
           {terminee && <Puce>Terminée</Puce>}
-          <Link to={`/patients/${patient?.id}`} className="btn-secondaire">
-            <FolderOpen className="h-[14px] w-[14px]" /> Dossier
-          </Link>
+          <button
+            onClick={() => setDossierOuvert((v) => !v)}
+            aria-pressed={dossierOuvert}
+            className={dossierOuvert ? 'btn-primaire' : 'btn-secondaire'}
+            title="Afficher le dossier à côté de la consultation"
+          >
+            <FolderOpen className="h-[14px] w-[14px]" />
+            {dossierOuvert ? 'Fermer le dossier' : 'Dossier'}
+          </button>
         </div>
 
         {patient?.allergies && (
@@ -281,6 +302,19 @@ export default function Consultation() {
 
       {saisieEnCours && (
         <p className="sans-impression mb-2 text-[11px] text-encre/40">Enregistrement…</p>
+      )}
+
+      {!terminee && patient?.id && (
+        <ConsultationPrecedente
+          patientId={patient.id}
+          consultationId={id}
+          onCopier={(champ, valeur) =>
+            setCs((c) => {
+              const actuel = (c[champ] ?? '').trim()
+              return { ...c, [champ]: actuel ? `${actuel}\n${valeur}` : valeur }
+            })
+          }
+        />
       )}
 
       {etat.erreur && (
@@ -375,6 +409,16 @@ export default function Consultation() {
           interrogatoire={interrogatoire}
           onRetour={() => allerA('prescriptions')}
           onCloturer={cloturer}
+        />
+      )}
+      </div>
+
+      {dossierOuvert && patient && (
+        <DossierLateral
+          patient={patient}
+          consultationId={id}
+          onFermer={() => setDossierOuvert(false)}
+          onCopier={reprendre}
         />
       )}
     </div>

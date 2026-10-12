@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { age, dateFr, dateHeureFr, initiales } from '../lib/format'
 import { Carte, Chargement, Vide, Puce, Alerte, Champ, Choix, Zone, Modale } from '../components/ui'
+import Supprimer from '../components/Supprimer'
 
 const ONGLETS = [
   { cle: 'consultations', libelle: 'Consultations', icone: Stethoscope },
@@ -130,7 +131,7 @@ export default function PatientDossier() {
                 {patient.numero_secu && <span className="font-mono">n° {patient.numero_secu}</span>}
                 {patient.regime_assurance && <span>{patient.regime_assurance}</span>}
                 {patient.fonds_cnamgs && <span>fonds {patient.fonds_cnamgs}</span>}
-                
+                {patient.convention && <span>convention {patient.convention}</span>}
                 {patient.validite_assurance && <span>valide jusqu’au {dateFr(patient.validite_assurance)}</span>}
               </p>
             )}
@@ -142,6 +143,13 @@ export default function PatientDossier() {
             <button onClick={nouvelleConsultation} className="btn-primaire">
               <Stethoscope className="h-[14px] w-[14px]" /> Nouvelle consultation
             </button>
+            <Supprimer
+              type="patient"
+              id={id}
+              bouton="texte"
+              libelle={`${patient.nom} ${patient.prenom ?? ''} — ${patient.code}`}
+              onSupprime={() => navigate('/patients', { replace: true })}
+            />
           </div>
         </div>
 
@@ -195,7 +203,15 @@ export default function PatientDossier() {
 
       <div className="mt-3">
         {onglet === 'consultations' && <OngletConsultations lignes={d.consultations} onNouvelle={nouvelleConsultation} />}
-        {onglet === 'comptes_rendus' && <OngletComptesRendus lignes={d.comptes_rendus} patientId={id} />}
+        {onglet === 'comptes_rendus' && (
+          <OngletComptesRendus
+            lignes={d.comptes_rendus}
+            patientId={id}
+            onSupprime={(idCr) =>
+              setD((x) => ({ ...x, comptes_rendus: x.comptes_rendus.filter((c) => c.id !== idCr) }))
+            }
+          />
+        )}
         {onglet === 'ordonnances' && <OngletOrdonnances lignes={d.ordonnances} />}
         {onglet === 'examens' && (
           <OngletExamens
@@ -314,7 +330,7 @@ function OngletConsultations({ lignes, onNouvelle }) {
   )
 }
 
-function OngletComptesRendus({ lignes, patientId }) {
+function OngletComptesRendus({ lignes, patientId, onSupprime }) {
   if (!lignes.length)
     return (
       <Carte>
@@ -334,14 +350,20 @@ function OngletComptesRendus({ lignes, patientId }) {
     <Carte>
       <ul className="divide-y divide-sarcelle-100">
         {lignes.map((x) => (
-          <li key={x.id}>
-            <Link to={`/comptes-rendus/${x.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-sarcelle-50/70">
+          <li key={x.id} className="flex items-center gap-2 pr-3 hover:bg-sarcelle-50/70">
+            <Link to={`/comptes-rendus/${x.id}`} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2.5">
               <span className="font-mono text-[11px] text-encre/45">{x.numero}</span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ardoise">{x.titre}</span>
               <span className="hidden text-[11.5px] text-encre/50 sm:block">{x.categorie}</span>
               <span className="whitespace-nowrap text-[11.5px] text-encre/50">{dateFr(x.date_cr)}</span>
               <Puce>{x.statut}</Puce>
             </Link>
+            <Supprimer
+              type="compte_rendu"
+              id={x.id}
+              libelle={`${x.numero} — ${x.titre}`}
+              onSupprime={() => onSupprime(x.id)}
+            />
           </li>
         ))}
       </ul>

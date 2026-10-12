@@ -10,7 +10,7 @@ export async function chargerGrilles() {
     .select(
       'id, code, nom, icone, ordre, defaut, ' +
         'sections:grille_sections(id, titre, sexe, ordre, a_valider, ' +
-        'condition_item_code, condition_valeur, ' +
+        'condition_item_code, condition_valeur, groupe, ' +
         'liens:grille_items(ordre, item:items(id, code, libelle, type, unite, options, categorie)))'
     )
     .eq('actif', true)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, Plus, Trash2, Info, Link2, Pill, FlaskConical, Calculator,
-  Search, Loader2, BookOpen, ChevronDown, ClipboardList, Check,
+  Search, Loader2, BookOpen, ChevronDown, ClipboardList, Check, Star,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { chargerBilans } from '../../lib/interrogatoire'
@@ -104,6 +104,7 @@ export default function EtapePrescriptions({
   const [ordoTypes, setOrdoTypes] = useState([])
   const [ficheOuverte, setFicheOuverte] = useState(null)
   const [conseils, setConseils] = useState(null)
+  const [frequents, setFrequents] = useState([])
   const [detailConseils, setDetailConseils] = useState(false)
   const [catalogue, setCatalogue] = useState(false)
   const [rechercheOrdo, setRechercheOrdo] = useState('')
@@ -144,6 +145,26 @@ export default function EtapePrescriptions({
 
       // Référentiels du médecin : unités, valeurs de référence, thérapeutique
       chargerExamensRef().then((x) => vivant && setRefExamens(x))
+
+      // Ce que le médecin prescrit réellement, par ordre de fréquence
+      supabase
+        .from('examens_demandes')
+        .select('libelle')
+        .eq('prescrit', true)
+        .order('date_demande', { ascending: false })
+        .limit(800)
+        .then(({ data }) => {
+          if (!vivant) return
+          const compte = {}
+          ;(data ?? []).forEach((x) => {
+            compte[x.libelle] = (compte[x.libelle] ?? 0) + 1
+          })
+          setFrequents(
+            Object.entries(compte)
+              .sort((a, b) => b[1] - a[1])
+              .map(([libelle, n]) => ({ libelle, n }))
+          )
+        })
       chargerMedicamentsRef().then((x) => vivant && setRefMeds(x))
       chargerOrdonnancesTypes().then((x) => vivant && setOrdoTypes(x))
 
@@ -468,6 +489,29 @@ export default function EtapePrescriptions({
     return [...ordonnancesPertinentes, ...autres]
   }, [ordoTypes, ordonnancesPertinentes, rechercheOrdo])
 
+  // Un examen calculable n'affiche son repère qu'une fois le calcul
+  // réellement possible : avant, « recalculer » n'aurait rien à faire.
+  const calculsDisponibles = useMemo(
+    () => new Set(calculs.filter((c) => c.valeur !== null).map((c) => c.code)),
+    [calculs]
+  )
+
+  /* Les examens les plus prescrits parmi ceux que les motifs proposent.
+     Un clic coche la ligne correspondante, sans la dupliquer. */
+  const habituels = useMemo(() => {
+    if (!frequents.length || !blocs.length) return []
+    const parLibelle = new Map()
+    blocs.forEach((b) =>
+      b.examens.forEach((e) => {
+        if (!e.doublon && !parLibelle.has(e.libelle)) parLibelle.set(e.libelle, e)
+      })
+    )
+    return frequents
+      .filter((f) => parLibelle.has(f.libelle))
+      .slice(0, 8)
+      .map((f) => ({ ...f, examen: parLibelle.get(f.libelle) }))
+  }, [frequents, blocs])
+
   const medicaments = lignes.filter((l) => l.medicament.trim())
   const avecResultat = retenus.filter((e) => e.resultat).length
 
@@ -598,6 +642,37 @@ export default function EtapePrescriptions({
         }
       >
         <div className="space-y-3 p-4">
+          {habituels.length > 0 && (
+            <div className="rounded-xs border border-sarcelle-100 bg-sarcelle-50/50 px-3 py-2">
+              <p className="etiquette mb-1.5 flex items-center gap-1.5">
+                <Star className="h-[13px] w-[13px]" /> Vos examens les plus prescrits pour ces motifs
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {habituels.map(({ libelle, n, examen }) => {
+                  const coche = !!etats[examen.id]?.coche
+                  return (
+                    <button
+                      key={examen.id}
+                      onClick={() => majEtat(examen.id, 'coche', !coche)}
+                      title={`Prescrit ${n} fois`}
+                      className={`rounded-full border px-2.5 py-[3px] text-[11.5px] transition ${
+                        coche
+                          ? 'border-sarcelle bg-sarcelle text-white'
+                          : 'border-sarcelle-100 bg-white text-ardoise hover:border-sarcelle-400'
+                      }`}
+                    >
+                      {coche && <Check className="mr-1 inline h-[11px] w-[11px]" />}
+                      {libelle}
+                      <span className={`ml-1.5 font-mono text-[10px] ${coche ? 'text-white/70' : 'text-encre/40'}`}>
+                        {n}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {!pret && (
             <p className="flex items-center gap-2 py-4 text-[12.5px] text-encre/55">
               <Loader2 className="h-4 w-4 animate-spin" /> Chargement des bilans…
@@ -668,12 +743,14 @@ export default function EtapePrescriptions({
                               onChange={(ev) => majEtat(e.id, 'resultat', ev.target.value)}
                             />
                             <input
-                              className="champ w-24 py-[3px] font-mono text-[11px]"
+                              className="champ w-28 py-[3px] font-mono text-[11px]"
                               placeholder="unité"
+                              title={s.unite ?? ''}
                               value={s.unite ?? ''}
                               onChange={(ev) => majEtat(e.id, 'unite', ev.target.value)}
                             />
-                            {calculPourExamen(e.libelle) ? (
+                            {calculPourExamen(e.libelle) &&
+                            calculsDisponibles.has(calculPourExamen(e.libelle).code) ? (
                               s.auto ? (
                                 <span
                                   className="puce w-[74px] shrink-0 justify-center bg-sarcelle-100 text-sarcelle-600"

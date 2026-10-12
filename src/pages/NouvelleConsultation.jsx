@@ -16,12 +16,12 @@ const FONDS = [
   { value: 'SP', label: 'SP — Secteur privé' },
 ]
 
-const ORGANISMES = ['CNAMGS', 'Aucune', 'Autre']
+const ORGANISMES = ['CNAMGS', 'CNSS', 'Assurance privée', 'Mutuelle d’entreprise', 'Aucun']
 
 const VIDE = {
   nom: '', prenom: '', sexe: '', date_naissance: '', age_saisi: '', age_presume: false,
   telephone: '',
-  organisme_choix: 'CNAMGS', organisme_autre: '', numero_secu: '', fonds_cnamgs: '',
+  organisme_assurance: '', numero_secu: '', fonds_cnamgs: '', convention: '',
   ville: 'Libreville', quartier: '', adresse: '',
 }
 
@@ -36,6 +36,7 @@ export default function NouvelleConsultation() {
   const [grilles, setGrilles] = useState([])
   const [motifs, setMotifs] = useState([])
   const [envoi, setEnvoi] = useState(false)
+  const [reprise, setReprise] = useState('')
   const [erreur, setErreur] = useState('')
   const [chargement, setChargement] = useState(true)
 
@@ -84,9 +85,7 @@ export default function NouvelleConsultation() {
       setErreur('Le nom du patient est obligatoire.')
       return null
     }
-    const { age_saisi, organisme_choix, organisme_autre, ...champs } = f
-    champs.organisme_assurance =
-      organisme_choix === 'Autre' ? organisme_autre.trim() || 'Autre' : organisme_choix
+    const { age_saisi, ...champs } = f
     const charge = Object.fromEntries(
       Object.entries(champs).map(([k, v]) => [k, typeof v === 'string' && !v.trim() ? null : v])
     )
@@ -109,6 +108,28 @@ export default function NouvelleConsultation() {
     setPatient(p)
     setCreation(false)
     setEtape(2)
+  }
+
+  /* Un patient qui revient consulte le plus souvent pour la même chose :
+     on reprend les motifs de sa dernière consultation, modifiables. */
+  const reprendreMotifs = async (p) => {
+    setReprise('')
+    const { data } = await supabase
+      .from('consultations')
+      .select('date_consultation, motifs:consultation_motifs(grille:grilles(code, nom))')
+      .eq('patient_id', p.id)
+      .order('date_consultation', { ascending: false })
+      .limit(1)
+
+    const derniere = data?.[0]
+    const codes = (derniere?.motifs ?? []).map((m) => m.grille?.code).filter(Boolean)
+    if (!codes.length) return
+
+    setMotifs((actuels) => [...new Set([...actuels, ...codes])])
+    setReprise(
+      `Motifs repris de la consultation du ${dateFr(derniere.date_consultation)} : ` +
+        (derniere.motifs ?? []).map((m) => m.grille?.nom).filter(Boolean).join(', ')
+    )
   }
 
   const ouvrirConsultation = async () => {
@@ -213,36 +234,24 @@ export default function NouvelleConsultation() {
               <Bloc titre="Assurance">
                 <Choix
                   label="Organisme"
-                  vide={null}
                   options={ORGANISMES}
-                  value={f.organisme_choix}
-                  onChange={(e) =>
-                    setF((x) => ({
-                      ...x,
-                      organisme_choix: e.target.value,
-                      fonds_cnamgs: e.target.value === 'CNAMGS' ? x.fonds_cnamgs : '',
-                    }))
-                  }
+                  value={f.organisme_assurance}
+                  onChange={maj('organisme_assurance')}
                 />
-                {f.organisme_choix === 'Autre' && (
-                  <Champ
-                    label="Nom de l’organisme"
-                    value={f.organisme_autre}
-                    onChange={maj('organisme_autre')}
-                    placeholder="Assurance, mutuelle d’entreprise…"
-                  />
-                )}
-                {f.organisme_choix === 'CNAMGS' && (
-                  <Choix
-                    label="Fonds"
-                    options={FONDS}
-                    value={f.fonds_cnamgs}
-                    onChange={maj('fonds_cnamgs')}
-                  />
-                )}
-                {f.organisme_choix !== 'Aucune' && (
-                  <Champ label="N° d’assuré" value={f.numero_secu} onChange={maj('numero_secu')} />
-                )}
+                <Champ label="N° d’assuré" value={f.numero_secu} onChange={maj('numero_secu')} />
+                <Choix
+                  label="Fonds"
+                  options={FONDS}
+                  value={f.fonds_cnamgs}
+                  onChange={maj('fonds_cnamgs')}
+                />
+                <ChampSuggere
+                  label="Convention"
+                  domaine="convention"
+                  valeur={f.convention}
+                  onChange={(v) => setF((x) => ({ ...x, convention: v }))}
+                  placeholder="BGFI, Total…"
+                />
               </Bloc>
 
               <Bloc titre="Adresse">
@@ -271,6 +280,7 @@ export default function NouvelleConsultation() {
                 onChoisir={(p) => {
                   setPatient(p)
                   setEtape(2)
+                  reprendreMotifs(p)
                 }}
                 onCreer={(terme) => {
                   setF({ ...VIDE, nom: terme?.trim() ?? '' })
@@ -315,7 +325,12 @@ export default function NouvelleConsultation() {
             titre="Pourquoi consulte-t-il ?"
             sous="Plusieurs motifs possibles. Les questions communes ne seront posées qu’une fois."
           >
-            <div className="p-4">
+            <div className="space-y-3 p-4">
+              {reprise && (
+                <p className="rounded-xs border border-sarcelle-100 bg-sarcelle-50/60 px-3 py-2 text-[12px] text-sarcelle-600">
+                  {reprise}
+                </p>
+              )}
               <MotifSelector
                 grilles={grilles}
                 retenus={motifs}

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { dateHeureFr, age } from '../lib/format'
 import { exporterExcel } from '../lib/excel'
 import { Carte, Chargement, Vide, Puce } from '../components/ui'
+import Supprimer from '../components/Supprimer'
 import { Recherche, BoutonExport, BoutonReinitialiser, ZoneFiltres, Filtre } from '../components/DataToolbar'
 
 const FILTRES_VIDES = { terme: '', du: '', au: '', statut: '', type: '', mesConsultations: false }
@@ -170,6 +171,7 @@ export default function ConsultationsList() {
                   <th>Motif</th>
                   <th>Diagnostic</th>
                   <th>Statut</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
@@ -202,6 +204,14 @@ export default function ConsultationsList() {
                     </td>
                     <td>
                       <Puce>{x.statut}</Puce>
+                    </td>
+                    <td>
+                      <Supprimer
+                        type="consultation"
+                        id={x.id}
+                        libelle={`${x.numero} — ${x.patient?.nom ?? ''} ${x.patient?.prenom ?? ''}`}
+                        onSupprime={() => setLignes((l) => l.filter((y) => y.id !== x.id))}
+                      />
                     </td>
                   </tr>
                 ))}

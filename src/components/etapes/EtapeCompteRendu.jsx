@@ -3,7 +3,7 @@ import { ArrowLeft, Printer, RefreshCw, Save, CheckCircle2, Signature } from 'lu
 import { supabase } from '../../lib/supabase'
 import { composerCompteRendu, construireContexte, fusionner } from '../../lib/templates'
 import { calculerTout } from '../../lib/calculs'
-import { age } from '../../lib/format'
+import { age, imc, interpretationImc } from '../../lib/format'
 import { jourLong } from '../../lib/format'
 import { Carte, Alerte, Puce } from '../ui'
 
@@ -66,8 +66,18 @@ export default function EtapeCompteRendu({
 
     // Les valeurs calculées sont recomposées à partir des constantes et
     // des résultats, pour que le compte rendu les reprenne.
+    // La ligne IMC porte une valeur calculée, vide dans l'état local :
+    // sans ce report, l'IMC n'apparaissait pas dans le compte rendu.
+    const valeurDe = (l) => params.find((x) => x.libelle === l)?.valeur ?? ''
+    const imcCalcule = imc(valeurDe('Poids'), valeurDe('Taille'))
+    const parametres = params.map((x) =>
+      x.calcule || x.libelle === 'Indice de masse corporelle'
+        ? { ...x, valeur: imcCalcule, remarque: interpretationImc(imcCalcule) }
+        : x
+    )
+
     const mesures = {}
-    params.forEach((p) => {
+    parametres.forEach((p) => {
       if (String(p.valeur ?? '').trim()) mesures[p.libelle] = p.valeur
     })
     // Seuls les résultats du jour alimentent les calculs : un DFG
@@ -83,7 +93,7 @@ export default function EtapeCompteRendu({
     const contexte = construireContexte({
       patient,
       consultation,
-      parametres: params,
+      parametres,
       medecin,
       motifs: motifsNoms,
       interrogatoire,

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { age, dateFr, initiales } from '../lib/format'
 import { exporterExcel } from '../lib/excel'
 import { Carte, Chargement, Vide, Puce } from '../components/ui'
+import Supprimer from '../components/Supprimer'
 import { Recherche, BoutonExport, BoutonReinitialiser, ZoneFiltres, Filtre } from '../components/DataToolbar'
 
 const FILTRES_VIDES = { terme: '', sexe: '', organisme: '', ville: '', tranche: '' }
@@ -78,6 +79,7 @@ export default function PatientsList() {
         'N° sécurité sociale': p.numero_secu ?? '',
         Régime: p.regime_assurance ?? '',
         Fonds: p.fonds_cnamgs ?? '',
+        Convention: p.convention ?? '',
         'Groupe sanguin': p.groupe_sanguin ?? '',
         Allergies: p.allergies ?? '',
         'Créé le': dateFr(p.created_at),
@@ -139,7 +141,7 @@ export default function PatientsList() {
           <Filtre label="Assurance">
             <select className="champ w-[150px]" value={f.organisme} onChange={(e) => set('organisme')(e.target.value)}>
               <option value="">Toutes</option>
-              {['CNAMGS', 'Aucune', 'Autre'].map((o) => (
+              {['CNAMGS', 'CNSS', 'Assurance privée', 'Mutuelle d’entreprise', 'Aucun'].map((o) => (
                 <option key={o}>{o}</option>
               ))}
             </select>
@@ -185,6 +187,7 @@ export default function PatientsList() {
                   <th>Ville</th>
                   <th>Assurance</th>
                   <th>N° assuré</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
@@ -214,6 +217,14 @@ export default function PatientsList() {
                     <td className="text-[12px] text-encre/65">{p.ville ?? '—'}</td>
                     <td>{p.organisme_assurance ? <Puce ton="Validé">{p.organisme_assurance}</Puce> : <span className="text-encre/30">—</span>}</td>
                     <td className="font-mono text-[11.5px] text-encre/60">{p.numero_secu ?? '—'}</td>
+                    <td>
+                      <Supprimer
+                        type="patient"
+                        id={p.id}
+                        libelle={`${p.nom} ${p.prenom ?? ''} — ${p.code}`}
+                        onSupprime={() => setLignes((l) => l.filter((x) => x.id !== p.id))}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

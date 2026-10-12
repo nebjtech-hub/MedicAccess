@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { dateFr, dateHeureFr } from '../lib/format'
 import { exporterExcel } from '../lib/excel'
 import { Carte, Chargement, Vide, Puce } from '../components/ui'
+import Supprimer from '../components/Supprimer'
 import { Recherche, BoutonExport, BoutonReinitialiser, ZoneFiltres, Filtre } from '../components/DataToolbar'
 
 const FILTRES_VIDES = { terme: '', du: '', au: '', statut: '', categorie: '', mesCr: false }
@@ -43,14 +44,27 @@ export default function ComptesRendusList() {
     })()
   }, [f.du, f.au, f.statut, f.categorie, f.mesCr, medecin?.id])
 
+  /* Recherche par mots-clés : accents ignorés, et tous les mots doivent
+     être présents. « diabete insuline » retrouve un compte rendu
+     contenant « Diabète » et « Insuline », où qu'ils se trouvent. */
   const visibles = useMemo(() => {
-    const t = f.terme.trim().toLowerCase()
-    if (!t) return lignes
-    return lignes.filter((x) =>
-      [x.numero, x.titre, x.patient?.nom, x.patient?.prenom, x.patient?.code, x.contenu]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(t))
-    )
+    const sansAccents = (s) =>
+      String(s ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+
+    const mots = sansAccents(f.terme).split(/\s+/).filter(Boolean)
+    if (!mots.length) return lignes
+
+    return lignes.filter((x) => {
+      const texte = sansAccents(
+        [x.numero, x.titre, x.categorie, x.contenu,
+         x.patient?.nom, x.patient?.prenom, x.patient?.code,
+         x.medecin?.nom, x.modele?.nom].filter(Boolean).join(' ')
+      )
+      return mots.every((m) => texte.includes(m))
+    })
   }, [lignes, f.terme])
 
   const exporter = () =>
@@ -103,7 +117,7 @@ export default function ComptesRendusList() {
             <Recherche
               valeur={f.terme}
               onChange={set('terme')}
-              placeholder="Patient, titre, contenu, n° de document"
+              placeholder="Mots-clés : diagnostic, traitement, patient, n° de document"
               className="w-full"
             />
           </Filtre>
@@ -171,6 +185,7 @@ export default function ComptesRendusList() {
                   <th>Modèle</th>
                   <th>Médecin</th>
                   <th>Statut</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +215,14 @@ export default function ComptesRendusList() {
                     </td>
                     <td>
                       <Puce>{x.statut}</Puce>
+                    </td>
+                    <td>
+                      <Supprimer
+                        type="compte_rendu"
+                        id={x.id}
+                        libelle={`${x.numero} — ${x.titre}`}
+                        onSupprime={() => setLignes((l) => l.filter((y) => y.id !== x.id))}
+                      />
                     </td>
                   </tr>
                 ))}

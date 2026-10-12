@@ -111,6 +111,7 @@ export default function EtapeInterrogatoire({
           grilles={grilles}
           motifs={motifs}
           sexePatient={patient?.sexe}
+          patientId={patient?.id}
           onValider={onValider}
           onProgression={onProgression}
         />

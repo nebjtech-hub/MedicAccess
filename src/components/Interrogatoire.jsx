@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, ArrowDownToLine, ArrowRight, Save, Link2 } from 'lucide-react'
+import { Keyboard, ArrowDownToLine, ArrowRight, Save, Link2, CornerDownLeft } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import {
   fusionner, chargerReponses, enregistrerReponses, composerTexte,
   composerParDestination, progression,
@@ -20,7 +21,8 @@ const ETATS = {
  * une information clinique.
  */
 export default function Interrogatoire({
-  consultationId, grilles, motifs, sexePatient, onInserer, onValider, onProgression,
+  consultationId, grilles, motifs, sexePatient, patientId,
+  onInserer, onValider, onProgression,
 }) {
   const [reponses, setReponses] = useState({})
 
@@ -33,6 +35,8 @@ export default function Interrogatoire({
   )
 
   const [pret, setPret] = useState(false)
+  const ancres = useRef({})
+  const vuesPrecedentes = useRef(null)
   const [etat, setEtat] = useState({ message: '', erreur: '' })
   const [aide, setAide] = useState(false)
   const refs = useRef({})
@@ -44,6 +48,28 @@ export default function Interrogatoire({
       setPret(true)
     })
   }, [consultationId])
+
+  /* Le traitement en cours est rarement différent de la dernière
+     ordonnance : on le propose plutôt que de le faire ressaisir. */
+  const [traitementAnterieur, setTraitementAnterieur] = useState('')
+  useEffect(() => {
+    if (!patientId) return
+    supabase
+      .from('ordonnances')
+      .select('date_ordonnance, lignes:ordonnance_lignes(medicament, dosage, posologie, ordre)')
+      .eq('patient_id', patientId)
+      .order('date_ordonnance', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        const lignes = [...(data?.[0]?.lignes ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
+        if (!lignes.length) return
+        setTraitementAnterieur(
+          lignes
+            .map((l) => [l.medicament, l.dosage, l.posologie].filter(Boolean).join(' '))
+            .join(' ; ')
+        )
+      })
+  }, [patientId])
 
   /* Enregistrement différé : la frappe ne déclenche pas une requête par touche */
   useEffect(() => {
@@ -110,6 +136,20 @@ export default function Interrogatoire({
       aller(idx - 1)
     }
   }
+
+  /* Répondre « Diabète connu » ouvre la rubrique de suivi plus bas dans
+     la page : on y amène le médecin au lieu de le laisser la chercher. */
+  useEffect(() => {
+    if (!pret) return
+    const visibles = sections.map((s) => s.id)
+    const avant = vuesPrecedentes.current
+    vuesPrecedentes.current = visibles
+    if (!avant) return
+    const nouvelle = visibles.find((id) => !avant.includes(id))
+    if (!nouvelle) return
+    const el = ancres.current[nouvelle]
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [sections, pret])
 
   const { faits, total } = progression(sections, reponses)
   const texte = composerTexte(sections, reponses)
@@ -182,8 +222,15 @@ export default function Interrogatoire({
       {/* ---------------------------------------------------------- sections */}
       <div className="min-h-0 flex-1 overflow-y-auto fin px-3 py-3">
         <div className="space-y-4">
-          {sections.map((s) => (
-            <section key={s.id}>
+          {sections.map((s, idx) => (
+            <section key={s.id} ref={(el) => (ancres.current[s.id] = el)}>
+              {/* Un volet regroupant plusieurs rubriques n'affiche son
+                  titre qu'une fois, au-dessus de la première. */}
+              {s.groupe && s.groupe !== sections[idx - 1]?.groupe && (
+                <h2 className="mb-2 mt-5 border-b border-sarcelle-100 pb-1 text-[12.5px] font-semibold uppercase tracking-[.08em] text-sarcelle-600">
+                  {s.groupe}
+                </h2>
+              )}
               <header className="mb-1.5 flex flex-wrap items-center gap-2">
                 <h3 className="text-[11px] font-semibold uppercase tracking-[.07em] text-ardoise">
                   {s.titre}
@@ -320,11 +367,27 @@ export default function Interrogatoire({
                           )}
                         </span>
                       ) : (
-                        <input
-                          className="champ w-full py-[3px] sm:w-64"
-                          value={r.valeur ?? ''}
-                          onChange={(e) => definir(i.id, { valeur: e.target.value, etat: 'presente' })}
-                        />
+                        <span className="flex w-full items-center gap-1.5 sm:w-auto">
+                          <input
+                            className="champ w-full py-[3px] sm:w-64"
+                            value={r.valeur ?? ''}
+                            onChange={(e) => definir(i.id, { valeur: e.target.value, etat: 'presente' })}
+                          />
+                          {i.code === 'traitement_en_cours' &&
+                            traitementAnterieur &&
+                            !String(r.valeur ?? '').trim() && (
+                              <button
+                                onClick={() =>
+                                  definir(i.id, { valeur: traitementAnterieur, etat: 'presente' })
+                                }
+                                title={traitementAnterieur}
+                                className="shrink-0 whitespace-nowrap rounded-full border border-sarcelle-100 bg-white px-2 py-[2px] text-[10.5px] text-sarcelle-600 transition hover:border-sarcelle-400"
+                              >
+                                <CornerDownLeft className="mr-1 inline h-[10px] w-[10px]" />
+                                dernière ordonnance
+                              </button>
+                            )}
+                        </span>
                       )}
                     </div>
                   )
