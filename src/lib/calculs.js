@@ -23,6 +23,22 @@ export const nombre = (v) => {
   return m ? parseFloat(m[0]) : null
 }
 
+/**
+ * Deux écritures d'une même unité ne doivent pas bloquer un calcul :
+ * « µmol/L », « μmol/l » et « umol/L » désignent la même chose. Le µ de
+ * la base et celui du code peuvent être deux caractères Unicode distincts.
+ */
+const memeUnite = (a, b) => {
+  const n = (u) =>
+    String(u ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\u03bc\u00b5u]mol/g, 'µmol')
+      .replace(/\s+/g, '')
+      .replace(/,/g, '.')
+  return n(a) === n(b)
+}
+
 const arrondi = (n, d = 2) => (Number.isFinite(n) ? Number(n.toFixed(d)) : null)
 
 /**
@@ -40,6 +56,16 @@ export const CALCULS = [
     sources: ['Créatinine'],
     unites: { 'Créatinine': 'µmol/L' },
     besoinPatient: ['age', 'sexe'],
+    // Ce qui manque est dit à l'écran : un calcul qui échoue en silence
+    // laisse croire à une panne.
+    besoin: (valeurs, patient) => {
+      const absents = []
+      if (!patient?.sexe) absents.push('le sexe du patient')
+      if (!patient?.age) absents.push('la date de naissance')
+      return absents.length
+        ? `Calcul impossible : ${absents.join(' et ')} manque${absents.length > 1 ? 'nt' : ''} dans la fiche patient`
+        : null
+    },
     calcul: ({ Créatinine }, patient) => {
       // Le laboratoire rend en µmol/L ; la formule attend des mg/dL
       const scr = Créatinine / 88.4
@@ -174,7 +200,7 @@ export function calculerTout(valeurs = {}, patient = {}, unites = {}) {
     // faux d'un facteur dix ou mille : on préfère ne pas calculer.
     const conflit = Object.entries(c.unites ?? {}).find(([src, attendue]) => {
       const u = (unites[src] ?? '').trim()
-      return u && u !== attendue
+      return u && !memeUnite(u, attendue)
     })
     if (conflit) {
       resultats.push({
@@ -191,7 +217,11 @@ export function calculerTout(valeurs = {}, patient = {}, unites = {}) {
     } catch {
       valeur = null
     }
-    const avertissement = c.avertissement ? c.avertissement(valeur, num) : null
+    const avertissement = valeur === null && c.besoin
+      ? c.besoin(num, patient)
+      : c.avertissement
+        ? c.avertissement(valeur, num)
+        : null
     if (valeur === null && !avertissement) return
 
     resultats.push({

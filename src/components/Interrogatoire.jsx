@@ -71,6 +71,101 @@ export default function Interrogatoire({
       })
   }, [patientId])
 
+  /* Mémoire des réponses libres.
+   *
+   * Deux sources, complémentaires :
+   *   — ce que le médecin a déjà écrit POUR CE PATIENT, qui vient en
+   *     premier parce que c'est presque toujours la bonne réponse ;
+   *   — ce qu'il écrit LE PLUS SOUVENT, tous patients confondus, qui
+   *     prend le relais quand le patient est nouveau.
+   *
+   * Objectif : qu'un champ de traitement se remplisse d'un clic plutôt
+   * que d'une ligne tapée à chaque consultation.
+   */
+  const [memoire, setMemoire] = useState({})
+
+  // Items à saisie libre des grilles retenues, condition ou non :
+  // la liste doit rester stable quand une branche s'ouvre.
+  const idsTexte = useMemo(() => {
+    const ids = new Set()
+    grilles
+      .filter((g) => motifs.includes(g.code))
+      .forEach((g) =>
+        g.sections.forEach((s) =>
+          s.items.forEach((i) => {
+            if (i.type === 'texte' && i.categorie !== 'autre') ids.add(i.id)
+          })
+        )
+      )
+    return [...ids]
+  }, [grilles, motifs])
+
+  useEffect(() => {
+    if (!idsTexte.length) return
+    let vivant = true
+
+    ;(async () => {
+      // Consultations du patient, pour distinguer ses propres réponses
+      let idsPatient = []
+      if (patientId) {
+        const { data } = await supabase
+          .from('consultations')
+          .select('id')
+          .eq('patient_id', patientId)
+          .order('date_consultation', { ascending: false })
+          .limit(20)
+        idsPatient = (data ?? []).map((c) => c.id).filter((x) => x !== consultationId)
+      }
+
+      const { data } = await supabase
+        .from('consultation_reponses')
+        .select('item_id, valeur, consultation_id, updated_at')
+        .in('item_id', idsTexte)
+        .not('valeur', 'is', null)
+        .order('updated_at', { ascending: false })
+        .limit(3000)
+
+      if (!vivant) return
+
+      const parItem = {}
+      const compteurs = {}
+
+      ;(data ?? []).forEach((r) => {
+        const v = String(r.valeur ?? '').trim()
+        if (v.length < 2 || r.consultation_id === consultationId) return
+        const cle = `${r.item_id}|${v.toLowerCase()}`
+        const c = (compteurs[cle] ??= {
+          item: r.item_id,
+          valeur: v,
+          n: 0,
+          patient: false,
+          vu: r.updated_at,
+        })
+        c.n += 1
+        if (idsPatient.includes(r.consultation_id)) c.patient = true
+      })
+
+      Object.values(compteurs).forEach((c) => (parItem[c.item] ??= []).push(c))
+
+      Object.keys(parItem).forEach((item) => {
+        parItem[item] = parItem[item]
+          .sort((a, b) => {
+            // Ce patient d'abord, puis le plus souvent écrit, puis le plus récent
+            if (a.patient !== b.patient) return a.patient ? -1 : 1
+            if (b.n !== a.n) return b.n - a.n
+            return new Date(b.vu) - new Date(a.vu)
+          })
+          .slice(0, 6)
+      })
+
+      setMemoire(parItem)
+    })()
+
+    return () => {
+      vivant = false
+    }
+  }, [idsTexte, patientId, consultationId])
+
   /* Enregistrement différé : la frappe ne déclenche pas une requête par touche */
   useEffect(() => {
     if (!pret) return
@@ -367,12 +462,37 @@ export default function Interrogatoire({
                           )}
                         </span>
                       ) : (
-                        <span className="flex w-full items-center gap-1.5 sm:w-auto">
+                        <span className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
                           <input
                             className="champ w-full py-[3px] sm:w-64"
                             value={r.valeur ?? ''}
                             onChange={(e) => definir(i.id, { valeur: e.target.value, etat: 'presente' })}
                           />
+                          {(memoire[i.id] ?? [])
+                            .filter((p) => p.valeur !== r.valeur)
+                            .map((p) => (
+                              <button
+                                key={p.valeur}
+                                onClick={() => definir(i.id, { valeur: p.valeur, etat: 'presente' })}
+                                title={
+                                  p.patient
+                                    ? `Déjà écrit pour ce patient · employé ${p.n} fois`
+                                    : `Employé ${p.n} fois`
+                                }
+                                className={`max-w-[180px] shrink-0 truncate rounded-full border px-2 py-[2px] text-[10.5px] transition ${
+                                  p.patient
+                                    ? 'border-sarcelle-400 bg-sarcelle-50 text-sarcelle-600'
+                                    : 'border-sarcelle-100 bg-white text-ardoise hover:border-sarcelle-400'
+                                }`}
+                              >
+                                {p.patient && '• '}
+                                {p.valeur}
+                                {!p.patient && p.n > 1 && (
+                                  <span className="ml-1 font-mono text-[9px] text-encre/40">{p.n}</span>
+                                )}
+                              </button>
+                            ))}
+
                           {i.code === 'traitement_en_cours' &&
                             traitementAnterieur &&
                             !String(r.valeur ?? '').trim() && (

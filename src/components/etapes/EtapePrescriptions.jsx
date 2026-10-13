@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, Plus, Trash2, Info, Link2, Pill, FlaskConical, Calculator,
@@ -105,6 +105,7 @@ export default function EtapePrescriptions({
   const [ficheOuverte, setFicheOuverte] = useState(null)
   const [conseils, setConseils] = useState(null)
   const [frequents, setFrequents] = useState([])
+  const champsResultat = useRef({})
   const [detailConseils, setDetailConseils] = useState(false)
   const [catalogue, setCatalogue] = useState(false)
   const [rechercheOrdo, setRechercheOrdo] = useState('')
@@ -218,6 +219,18 @@ export default function EtapePrescriptions({
       vivant = false
     }
   }, [grilles, JSON.stringify(motifs), consultation.id])
+
+  /** Coche l'examen puis amène le curseur dans son champ de résultat. */
+  const allerAuResultat = (idExamen) => {
+    if (!etats[idExamen]?.coche) majEtat(idExamen, 'coche', true)
+    requestAnimationFrame(() => {
+      const champ = champsResultat.current[idExamen]
+      if (!champ) return
+      champ.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      champ.focus()
+      champ.select?.()
+    })
+  }
 
   const majEtat = (id, champ, valeur) =>
     setEtats((e) => ({
@@ -653,8 +666,8 @@ export default function EtapePrescriptions({
                   return (
                     <button
                       key={examen.id}
-                      onClick={() => majEtat(examen.id, 'coche', !coche)}
-                      title={`Prescrit ${n} fois`}
+                      onClick={() => allerAuResultat(examen.id)}
+                      title={`Prescrit ${n} fois — cliquez pour saisir le résultat`}
                       className={`rounded-full border px-2.5 py-[3px] text-[11.5px] transition ${
                         coche
                           ? 'border-sarcelle bg-sarcelle text-white'
@@ -724,6 +737,7 @@ export default function EtapePrescriptions({
                           // Un ECBU, une échographie, un caryotype rendent un
                           // texte : ni champ numérique, ni unité, ni norme.
                           <input
+                            ref={(el) => (champsResultat.current[e.id] = el)}
                             className="champ min-w-[200px] flex-[2] py-[3px]"
                             placeholder={
                               e.type === 'Imagerie' ? 'Compte rendu, conclusion' : 'Résultat'
@@ -736,6 +750,7 @@ export default function EtapePrescriptions({
                         {!e.doublon && e.type_resultat !== 'qualitatif' && (
                           <>
                             <input
+                              ref={(el) => (champsResultat.current[e.id] = el)}
                               className="champ w-28 py-[3px] text-right"
                               inputMode="decimal"
                               placeholder="Résultat"

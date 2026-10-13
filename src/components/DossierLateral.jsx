@@ -73,13 +73,15 @@ export default function DossierLateral({ patient, consultationId, onFermer, onCo
           .order('created_at', { ascending: false }),
       ])
       if (!vivant) return
+      const ordonnances = (ord.data ?? []).map((o) => ({
+        ...o,
+        lignes: [...(o.lignes ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)),
+      }))
+
       setD({
         consultations: cs.data ?? [],
         comptesRendus: cr.data ?? [],
-        ordonnances: (ord.data ?? []).map((o) => ({
-          ...o,
-          lignes: [...(o.lignes ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)),
-        })),
+        ordonnances,
         examens: ex.data ?? [],
         antecedents: ant.data ?? [],
       })
@@ -156,6 +158,20 @@ export default function DossierLateral({ patient, consultationId, onFermer, onCo
     () => (d?.examens ?? []).filter((e) => e.resultat),
     [d]
   )
+
+  /* Le traitement en cours est ce que le médecin cherche en premier sur
+     un contrôle : il reste visible en haut, sans ouvrir d'onglet. */
+  const traitement = useMemo(() => {
+    const derniere = d?.ordonnances?.[0]
+    if (!derniere?.lignes?.length) return null
+    return {
+      date: derniere.date_ordonnance,
+      numero: derniere.numero,
+      texte: derniere.lignes
+        .map((l) => [l.medicament, l.posologie, l.duree, l.instructions].filter(Boolean).join(' — '))
+        .join('\n'),
+    }
+  }, [d])
 
   const contenu = () => {
     if (!d) return <Chargement texte="Ouverture du dossier…" />
@@ -342,6 +358,33 @@ export default function DossierLateral({ patient, consultationId, onFermer, onCo
           <div className="flex items-start gap-1.5 border-b border-panneau-roseb bg-panneau-rose px-3 py-1.5 text-[11.5px] text-[#8f2b2b]">
             <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0" />
             <span>{patient.allergies}</span>
+          </div>
+        )}
+
+        {traitement && (
+          <div className="border-b border-sarcelle-100 bg-panneau-vert/40 px-3 py-2">
+            <div className="mb-1 flex items-center gap-2">
+              <Pill className="h-3.5 w-3.5 shrink-0 text-[#2c6435]" />
+              <span className="etiquette flex-1 text-[#2c6435]">
+                Traitement en cours · {dateFr(traitement.date)}
+              </span>
+              <button
+                onClick={() => reprendre('trait-r', 'conduite_a_tenir', traitement.texte)}
+                className="text-[10.5px] text-[#2c6435] underline"
+              >
+                {copie === 'trait-r' ? 'repris' : 'reprendre'}
+              </button>
+              <button
+                onClick={() => versPressePapier('trait-c', traitement.texte)}
+                className="text-[#2c6435]/50 transition hover:text-[#2c6435]"
+                aria-label="Copier le traitement"
+              >
+                {copie === 'trait-c' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </button>
+            </div>
+            <pre className="fin max-h-24 overflow-auto whitespace-pre-wrap rounded-xs border border-panneau-vertb bg-white px-2 py-1.5 font-sans text-[11px] leading-relaxed text-encre/80">
+              {traitement.texte}
+            </pre>
           </div>
         )}
 
